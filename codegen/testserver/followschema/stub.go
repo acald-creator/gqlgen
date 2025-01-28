@@ -71,8 +71,8 @@ type Stub struct {
 		DeprecatedField                  func(ctx context.Context) (string, error)
 		Overlapping                      func(ctx context.Context) (*OverlappingFields, error)
 		DefaultParameters                func(ctx context.Context, falsyBoolean *bool, truthyBoolean *bool) (*DefaultParametersMirror, error)
-		DeferCase1                       func(ctx context.Context) (*DeferModel, error)
-		DeferCase2                       func(ctx context.Context) ([]*DeferModel, error)
+		DeferSingle                      func(ctx context.Context) (*DeferModel, error)
+		DeferMultiple                    func(ctx context.Context) ([]*DeferModel, error)
 		DirectiveArg                     func(ctx context.Context, arg string) (*string, error)
 		DirectiveNullableArg             func(ctx context.Context, arg *int, arg2 *int, arg3 *string) (*string, error)
 		DirectiveSingleNullableArg       func(ctx context.Context, arg1 *string) (*string, error)
@@ -85,7 +85,6 @@ type Stub struct {
 		DirectiveField                   func(ctx context.Context) (*string, error)
 		DirectiveDouble                  func(ctx context.Context) (*string, error)
 		DirectiveUnimplemented           func(ctx context.Context) (*string, error)
-		DirectiveConcurrent              func(ctx context.Context) ([]*ObjectDirectivesConcurrent, error)
 		EmbeddedCase1                    func(ctx context.Context) (*EmbeddedCase1, error)
 		EmbeddedCase2                    func(ctx context.Context) (*EmbeddedCase2, error)
 		EmbeddedCase3                    func(ctx context.Context) (*EmbeddedCase3, error)
@@ -353,11 +352,11 @@ func (r *stubQuery) Overlapping(ctx context.Context) (*OverlappingFields, error)
 func (r *stubQuery) DefaultParameters(ctx context.Context, falsyBoolean *bool, truthyBoolean *bool) (*DefaultParametersMirror, error) {
 	return r.QueryResolver.DefaultParameters(ctx, falsyBoolean, truthyBoolean)
 }
-func (r *stubQuery) DeferCase1(ctx context.Context) (*DeferModel, error) {
-	return r.QueryResolver.DeferCase1(ctx)
+func (r *stubQuery) DeferSingle(ctx context.Context) (*DeferModel, error) {
+	return r.QueryResolver.DeferSingle(ctx)
 }
-func (r *stubQuery) DeferCase2(ctx context.Context) ([]*DeferModel, error) {
-	return r.QueryResolver.DeferCase2(ctx)
+func (r *stubQuery) DeferMultiple(ctx context.Context) ([]*DeferModel, error) {
+	return r.QueryResolver.DeferMultiple(ctx)
 }
 func (r *stubQuery) DirectiveArg(ctx context.Context, arg string) (*string, error) {
 	return r.QueryResolver.DirectiveArg(ctx, arg)
@@ -394,9 +393,6 @@ func (r *stubQuery) DirectiveDouble(ctx context.Context) (*string, error) {
 }
 func (r *stubQuery) DirectiveUnimplemented(ctx context.Context) (*string, error) {
 	return r.QueryResolver.DirectiveUnimplemented(ctx)
-}
-func (r *stubQuery) DirectiveConcurrent(ctx context.Context) ([]*ObjectDirectivesConcurrent, error) {
-	return r.QueryResolver.DirectiveConcurrent(ctx)
 }
 func (r *stubQuery) EmbeddedCase1(ctx context.Context) (*EmbeddedCase1, error) {
 	return r.QueryResolver.EmbeddedCase1(ctx)

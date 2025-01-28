@@ -1,6 +1,6 @@
 package followschema
 
-// THIS CODE IS A STARTING POINT ONLY. IT WILL NOT BE UPDATED WITH SCHEMA CHANGES.
+// THIS CODE WILL BE UPDATED WITH SCHEMA CHANGES. PREVIOUS IMPLEMENTATION FOR SCHEMA CHANGES WILL BE KEPT IN THE COMMENT SECTION. IMPLEMENTATION FOR UNCHANGED SCHEMA WILL BE KEPT.
 
 import (
 	"context"
@@ -197,13 +197,13 @@ func (r *queryResolver) DefaultParameters(ctx context.Context, falsyBoolean *boo
 	panic("not implemented")
 }
 
-// DeferCase1 is the resolver for the deferCase1 field.
-func (r *queryResolver) DeferCase1(ctx context.Context) (*DeferModel, error) {
+// DeferSingle is the resolver for the deferSingle field.
+func (r *queryResolver) DeferSingle(ctx context.Context) (*DeferModel, error) {
 	panic("not implemented")
 }
 
-// DeferCase2 is the resolver for the deferCase2 field.
-func (r *queryResolver) DeferCase2(ctx context.Context) ([]*DeferModel, error) {
+// DeferMultiple is the resolver for the deferMultiple field.
+func (r *queryResolver) DeferMultiple(ctx context.Context) ([]*DeferModel, error) {
 	panic("not implemented")
 }
 
@@ -264,11 +264,6 @@ func (r *queryResolver) DirectiveDouble(ctx context.Context) (*string, error) {
 
 // DirectiveUnimplemented is the resolver for the directiveUnimplemented field.
 func (r *queryResolver) DirectiveUnimplemented(ctx context.Context) (*string, error) {
-	panic("not implemented")
-}
-
-// DirectiveConcurrent is the resolver for the directiveConcurrent field.
-func (r *queryResolver) DirectiveConcurrent(ctx context.Context) ([]*ObjectDirectivesConcurrent, error) {
 	panic("not implemented")
 }
 

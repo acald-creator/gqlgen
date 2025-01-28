@@ -45,7 +45,11 @@ func Generate(cfg *config.Config, option ...Option) error {
 				}
 			}
 		}
-		plugins = append([]plugin.Plugin{federation.New(cfg.Federation.Version)}, plugins...)
+		federationPlugin, err := federation.New(cfg.Federation.Version, cfg)
+		if err != nil {
+			return fmt.Errorf("failed to construct the Federation plugin: %w", err)
+		}
+		plugins = append([]plugin.Plugin{federationPlugin}, plugins...)
 	}
 
 	for _, o := range option {
@@ -113,16 +117,6 @@ func Generate(cfg *config.Config, option ...Option) error {
 		return fmt.Errorf("merging type systems failed: %w", err)
 	}
 
-	if err = codegen.GenerateCode(data); err != nil {
-		return fmt.Errorf("generating core failed: %w", err)
-	}
-
-	if !cfg.SkipModTidy {
-		if err = cfg.Packages.ModTidy(); err != nil {
-			return fmt.Errorf("tidy failed: %w", err)
-		}
-	}
-
 	for _, p := range plugins {
 		if mut, ok := p.(plugin.CodeGenerator); ok {
 			err := mut.GenerateCode(data)
@@ -136,6 +130,11 @@ func Generate(cfg *config.Config, option ...Option) error {
 		return fmt.Errorf("generating core failed: %w", err)
 	}
 
+	if !cfg.SkipModTidy {
+		if err = cfg.Packages.ModTidy(); err != nil {
+			return fmt.Errorf("tidy failed: %w", err)
+		}
+	}
 	if !cfg.SkipValidation {
 		if err := validate(cfg); err != nil {
 			return fmt.Errorf("validation failed: %w", err)

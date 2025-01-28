@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/99designs/gqlgen/_examples/federation/reviews/graph/model"
 	"github.com/99designs/gqlgen/plugin/federation/fedruntime"
 )
 
@@ -36,7 +37,7 @@ func (ec *executionContext) __resolve__service(ctx context.Context) (fedruntime.
 	}, nil
 }
 
-func (ec *executionContext) __resolve_entities(ctx context.Context, representations []map[string]interface{}) []fedruntime.Entity {
+func (ec *executionContext) __resolve_entities(ctx context.Context, representations []map[string]any) []fedruntime.Entity {
 	list := make([]fedruntime.Entity, len(representations))
 
 	repsMap := ec.buildRepresentationGroups(ctx, representations)
@@ -134,6 +135,8 @@ func (ec *executionContext) resolveEntityGroup(
 
 func isMulti(typeName string) bool {
 	switch typeName {
+	case "Product":
+		return true
 	default:
 		return false
 	}
@@ -153,29 +156,6 @@ func (ec *executionContext) resolveEntity(
 	}()
 
 	switch typeName {
-	case "Product":
-		resolverName, err := entityResolverNameForProduct(ctx, rep)
-		if err != nil {
-			return nil, fmt.Errorf(`finding resolver for Entity "Product": %w`, err)
-		}
-		switch resolverName {
-
-		case "findProductByManufacturerIDAndID":
-			id0, err := ec.unmarshalNString2string(ctx, rep["manufacturer"].(map[string]interface{})["id"])
-			if err != nil {
-				return nil, fmt.Errorf(`unmarshalling param 0 for findProductByManufacturerIDAndID(): %w`, err)
-			}
-			id1, err := ec.unmarshalNString2string(ctx, rep["id"])
-			if err != nil {
-				return nil, fmt.Errorf(`unmarshalling param 1 for findProductByManufacturerIDAndID(): %w`, err)
-			}
-			entity, err := ec.resolvers.Entity().FindProductByManufacturerIDAndID(ctx, id0, id1)
-			if err != nil {
-				return nil, fmt.Errorf(`resolving Entity "Product": %w`, err)
-			}
-
-			return entity, nil
-		}
 	case "User":
 		resolverName, err := entityResolverNameForUser(ctx, rep)
 		if err != nil {
@@ -193,14 +173,6 @@ func (ec *executionContext) resolveEntity(
 				return nil, fmt.Errorf(`resolving Entity "User": %w`, err)
 			}
 
-			entity.Host.ID, err = ec.unmarshalNString2string(ctx, rep["host"].(map[string]interface{})["id"])
-			if err != nil {
-				return nil, err
-			}
-			entity.Email, err = ec.unmarshalNString2string(ctx, rep["email"])
-			if err != nil {
-				return nil, err
-			}
 			return entity, nil
 		}
 
@@ -224,16 +196,63 @@ func (ec *executionContext) resolveManyEntities(
 
 	switch typeName {
 
+	case "Product":
+		resolverName, err := entityResolverNameForProduct(ctx, reps[0].entity)
+		if err != nil {
+			return fmt.Errorf(`finding resolver for Entity "Product": %w`, err)
+		}
+		switch resolverName {
+
+		case "findManyProductByManufacturerIDAndIDs":
+			typedReps := make([]*model.ProductByManufacturerIDAndIDsInput, len(reps))
+
+			for i, rep := range reps {
+				id0, err := ec.unmarshalNString2string(ctx, rep.entity["manufacturer"].(map[string]any)["id"])
+				if err != nil {
+					return errors.New(fmt.Sprintf("Field %s undefined in schema.", "manufacturerID"))
+				}
+				id1, err := ec.unmarshalNString2string(ctx, rep.entity["id"])
+				if err != nil {
+					return errors.New(fmt.Sprintf("Field %s undefined in schema.", "id"))
+				}
+
+				typedReps[i] = &model.ProductByManufacturerIDAndIDsInput{
+					ManufacturerID: id0,
+					ID:             id1,
+				}
+			}
+
+			entities, err := ec.resolvers.Entity().FindManyProductByManufacturerIDAndIDs(ctx, typedReps)
+			if err != nil {
+				return err
+			}
+
+			for i, entity := range entities {
+				entity.Manufacturer.ID, err = ec.unmarshalNString2string(ctx, reps[i].entity["manufacturer"].(map[string]any)["id"])
+				if err != nil {
+					return err
+				}
+				list[reps[i].index] = entity
+			}
+			return nil
+
+		default:
+			return fmt.Errorf("unknown resolver: %s", resolverName)
+		}
+
 	default:
 		return errors.New("unknown type: " + typeName)
 	}
 }
 
 func entityResolverNameForProduct(ctx context.Context, rep EntityRepresentation) (string, error) {
+	// we collect errors because a later entity resolver may work fine
+	// when an entity has multiple keys
+	entityResolverErrs := []error{}
 	for {
 		var (
 			m   EntityRepresentation
-			val interface{}
+			val any
 			ok  bool
 		)
 		_ = val
@@ -243,13 +262,20 @@ func entityResolverNameForProduct(ctx context.Context, rep EntityRepresentation)
 		m = rep
 		val, ok = m["manufacturer"]
 		if !ok {
+			entityResolverErrs = append(entityResolverErrs,
+				fmt.Errorf("%w due to missing Key Field \"manufacturer\" for Product", ErrTypeNotFound))
 			break
 		}
-		if m, ok = val.(map[string]interface{}); !ok {
+		if m, ok = val.(map[string]any); !ok {
+			// nested field value is not a map[string]interface so don't use it
+			entityResolverErrs = append(entityResolverErrs,
+				fmt.Errorf("%w due to nested Key Field \"manufacturer\" value not matching map[string]any for Product", ErrTypeNotFound))
 			break
 		}
 		val, ok = m["id"]
 		if !ok {
+			entityResolverErrs = append(entityResolverErrs,
+				fmt.Errorf("%w due to missing Key Field \"id\" for Product", ErrTypeNotFound))
 			break
 		}
 		if allNull {
@@ -258,24 +284,32 @@ func entityResolverNameForProduct(ctx context.Context, rep EntityRepresentation)
 		m = rep
 		val, ok = m["id"]
 		if !ok {
+			entityResolverErrs = append(entityResolverErrs,
+				fmt.Errorf("%w due to missing Key Field \"id\" for Product", ErrTypeNotFound))
 			break
 		}
 		if allNull {
 			allNull = val == nil
 		}
 		if allNull {
+			entityResolverErrs = append(entityResolverErrs,
+				fmt.Errorf("%w due to all null value KeyFields for Product", ErrTypeNotFound))
 			break
 		}
-		return "findProductByManufacturerIDAndID", nil
+		return "findManyProductByManufacturerIDAndIDs", nil
 	}
-	return "", fmt.Errorf("%w for Product", ErrTypeNotFound)
+	return "", fmt.Errorf("%w for Product due to %v", ErrTypeNotFound,
+		errors.Join(entityResolverErrs...).Error())
 }
 
 func entityResolverNameForUser(ctx context.Context, rep EntityRepresentation) (string, error) {
+	// we collect errors because a later entity resolver may work fine
+	// when an entity has multiple keys
+	entityResolverErrs := []error{}
 	for {
 		var (
 			m   EntityRepresentation
-			val interface{}
+			val any
 			ok  bool
 		)
 		_ = val
@@ -285,15 +319,20 @@ func entityResolverNameForUser(ctx context.Context, rep EntityRepresentation) (s
 		m = rep
 		val, ok = m["id"]
 		if !ok {
+			entityResolverErrs = append(entityResolverErrs,
+				fmt.Errorf("%w due to missing Key Field \"id\" for User", ErrTypeNotFound))
 			break
 		}
 		if allNull {
 			allNull = val == nil
 		}
 		if allNull {
+			entityResolverErrs = append(entityResolverErrs,
+				fmt.Errorf("%w due to all null value KeyFields for User", ErrTypeNotFound))
 			break
 		}
 		return "findUserByID", nil
 	}
-	return "", fmt.Errorf("%w for User", ErrTypeNotFound)
+	return "", fmt.Errorf("%w for User due to %v", ErrTypeNotFound,
+		errors.Join(entityResolverErrs...).Error())
 }

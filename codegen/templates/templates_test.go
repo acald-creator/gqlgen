@@ -3,7 +3,6 @@ package templates
 import (
 	"embed"
 	"fmt"
-	"go/types"
 	"os"
 	"path/filepath"
 	"testing"
@@ -54,6 +53,9 @@ func TestToGo(t *testing.T) {
 	require.Equal(t, "Identities", ToGo("identities"))
 	require.Equal(t, "Iphone", ToGo("IPHONE"))
 	require.Equal(t, "IPhone", ToGo("iPHONE"))
+	require.Equal(t, "UserIdentity", ToGo("USER_IDENTITY"))
+	require.Equal(t, "UserIdentity", ToGo("UserIdentity"))
+	require.Equal(t, "UserIdentity", ToGo("userIdentity"))
 }
 
 func TestToGoPrivate(t *testing.T) {
@@ -302,6 +304,10 @@ func Test_wordWalker(t *testing.T) {
 			expected: []*wordInfo{{Word: "Related"}, {WordOffset: 1, Word: "Urls"}},
 		},
 		{
+			input:    makeInput("USER_IDENTITY"),
+			expected: []*wordInfo{{Word: "USER"}, {WordOffset: 1, Word: "IDENTITY"}},
+		},
+		{
 			input:    makeInput("ITicket"),
 			expected: []*wordInfo{{Word: "ITicket"}},
 		},
@@ -357,27 +363,48 @@ func TestRenderFS(t *testing.T) {
 	assert.Equal(t, expectedString, actualContentsStr[:len(expectedString)])
 }
 
-func TestTypeName(t *testing.T) {
-	testType := types.NewNamed(
-		types.NewTypeName(0, types.NewPackage(
-			"github.com/99designs/gqlgen/codegen/templates",
-			"templates",
-		), "testType", nil),
-		types.NewStruct(nil, nil),
-		nil,
-	)
-
+func TestDict(t *testing.T) {
 	tests := []struct {
-		input    types.Type
-		expected string
+		name      string
+		input     []any
+		expected  map[string]any
+		expectErr bool
 	}{
-		{testType, "testType"},
-		{types.NewPointer(testType), "testType"},
-		{types.NewPointer(types.NewPointer(testType)), "*testType"},
+		{
+			name:      "valid key-value pairs",
+			input:     []any{"key1", "value1", "key2", "value2"},
+			expected:  map[string]any{"key1": "value1", "key2": "value2"},
+			expectErr: false,
+		},
+		{
+			name:      "odd number of arguments",
+			input:     []any{"key1", "value1", "key2"},
+			expected:  nil,
+			expectErr: true,
+		},
+		{
+			name:      "non-string key",
+			input:     []any{"key1", "value1", 123, "value2"},
+			expected:  nil,
+			expectErr: true,
+		},
+		{
+			name:      "empty input",
+			input:     []any{},
+			expected:  map[string]any{},
+			expectErr: false,
+		},
 	}
 
-	for _, test := range tests {
-		result := typeName(test.input)
-		assert.Equal(t, test.expected, result)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := dict(tt.input...)
+			if tt.expectErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expected, result)
+			}
+		})
 	}
 }

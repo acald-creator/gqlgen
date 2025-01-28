@@ -1,14 +1,14 @@
 package followschema
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"reflect"
-	"slices"
 	"testing"
+	"time"
 
+	"github.com/99designs/gqlgen/graphql/handler/transport"
 	"github.com/stretchr/testify/require"
 
 	"github.com/99designs/gqlgen/client"
@@ -22,7 +22,7 @@ func isNil(input any) bool {
 		return true
 	}
 	// Using reflect to check if the value is nil. This is necessary for
-	// for any types that are not nil types but have a nil value (e.g. *string).
+	// any types that are not nil types but have a nil value (e.g. *string).
 	value := reflect.ValueOf(input)
 	return value.IsNil()
 }
@@ -89,17 +89,6 @@ func TestDirectives(t *testing.T) {
 		return &ok, nil
 	}
 
-	resolvers.QueryResolver.DirectiveConcurrent = func(ctx context.Context) ([]*ObjectDirectivesConcurrent, error) {
-		return []*ObjectDirectivesConcurrent{
-			{
-				Key: 1,
-			},
-			{
-				Key: 2,
-			},
-		}, nil
-	}
-
 	okchan := func() (<-chan *string, error) {
 		res := make(chan *string, 1)
 		res <- &ok
@@ -122,9 +111,10 @@ func TestDirectives(t *testing.T) {
 	resolvers.SubscriptionResolver.DirectiveUnimplemented = func(ctx context.Context) (<-chan *string, error) {
 		return okchan()
 	}
-	srv := handler.NewDefaultServer(NewExecutableSchema(Config{
+	srv := handler.New(NewExecutableSchema(Config{
 		Resolvers: resolvers,
 		Directives: DirectiveRoot{
+			//nolint:revive // can't rename min, max because it's generated code
 			Length: func(ctx context.Context, obj any, next graphql.Resolver, min int, max *int, message *string) (any, error) {
 				e := func(msg string) error {
 					if message == nil {
@@ -146,6 +136,7 @@ func TestDirectives(t *testing.T) {
 				}
 				return res, nil
 			},
+			//nolint:revive // can't rename min, max because it's generated code
 			Range: func(ctx context.Context, obj any, next graphql.Resolver, min *int, max *int) (any, error) {
 				res, err := next(ctx)
 				if err != nil {
@@ -181,9 +172,6 @@ func TestDirectives(t *testing.T) {
 					return next(ctx)
 				}
 				return nil, fmt.Errorf("unsupported type %T", res)
-			},
-			Concurrent: func(ctx context.Context, obj any, next graphql.Resolver) (res any, err error) {
-				return next(ctx)
 			},
 			Custom: func(ctx context.Context, obj any, next graphql.Resolver) (any, error) {
 				return next(ctx)
@@ -235,7 +223,10 @@ func TestDirectives(t *testing.T) {
 			Unimplemented: nil,
 		},
 	}))
-
+	srv.AddTransport(transport.Websocket{
+		KeepAlivePingInterval: time.Second,
+	})
+	srv.AddTransport(transport.POST{})
 	srv.AroundFields(func(ctx context.Context, next graphql.Resolver) (res any, err error) {
 		path, _ := ctx.Value(ckey("path")).([]int)
 		return next(context.WithValue(ctx, ckey("path"), append(path, 1)))
@@ -470,26 +461,6 @@ func TestDirectives(t *testing.T) {
 			require.NoError(t, err)
 			require.Nil(t, resp.DirectiveObjectWithCustomGoModel.NullableText)
 		})
-	})
-	t.Run("concurrent directive", func(t *testing.T) {
-		var resp struct {
-			DirectiveConcurrent []struct {
-				Key int
-			}
-		}
-
-		err := c.Post(`query { directiveConcurrent{ key } }`, &resp)
-		slices.SortFunc(resp.DirectiveConcurrent, func(a, b struct{ Key int }) int {
-			return cmp.Compare(a.Key, b.Key)
-		})
-
-		keys := make([]int, 0, len(resp.DirectiveConcurrent))
-		for _, dc := range resp.DirectiveConcurrent {
-			keys = append(keys, dc.Key)
-		}
-
-		require.NoError(t, err)
-		require.Equal(t, []int{1, 2}, keys)
 	})
 
 	t.Run("Subscription directives", func(t *testing.T) {

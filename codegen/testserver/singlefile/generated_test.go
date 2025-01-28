@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/99designs/gqlgen/graphql/handler/transport"
 	"github.com/stretchr/testify/require"
 
 	"github.com/99designs/gqlgen/client"
@@ -37,14 +38,9 @@ func TestUnionFragments(t *testing.T) {
 	resolvers.QueryResolver.ShapeUnion = func(ctx context.Context) (ShapeUnion, error) {
 		return &Circle{Radius: 32}, nil
 	}
-	resolvers.QueryResolver.Shapes = func(ctx context.Context) ([]Shape, error) {
-		return []Shape{
-			&Circle{Radius: 45},
-			&Circle{Radius: 54},
-		}, nil
-	}
 
-	srv := handler.NewDefaultServer(NewExecutableSchema(Config{Resolvers: resolvers}))
+	srv := handler.New(NewExecutableSchema(Config{Resolvers: resolvers}))
+	srv.AddTransport(transport.POST{})
 	c := client.New(srv)
 
 	t.Run("inline fragment on union", func(t *testing.T) {
@@ -83,24 +79,5 @@ func TestUnionFragments(t *testing.T) {
 		}
 		`, &resp)
 		require.NotEmpty(t, resp.ShapeUnion.Radius)
-	})
-
-	t.Run("without circle", func(t *testing.T) {
-		var resp struct {
-			Shapes []struct {
-				Length, Width float64
-			}
-		}
-		require.Empty(t, resp.Shapes)
-		c.MustPost(`query {
-			shapes {
-				... on Rectangle {
-					length
-					width
-				}
-			}
-		}
-		`, &resp)
-		require.Empty(t, resp.Shapes)
 	})
 }

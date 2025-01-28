@@ -88,15 +88,15 @@ func Render(cfg Options) error {
 	}
 
 	roots := make([]string, 0, len(t.Templates()))
-	for _, templ := range t.Templates() {
+	for _, template := range t.Templates() {
 		// templates that end with _.gotpl are special files we don't want to include
-		if strings.HasSuffix(templ.Name(), "_.gotpl") ||
+		if strings.HasSuffix(template.Name(), "_.gotpl") ||
 			// filter out templates added with {{ template xxx }} syntax inside the template file
-			!strings.HasSuffix(templ.Name(), ".gotpl") {
+			!strings.HasSuffix(template.Name(), ".gotpl") {
 			continue
 		}
 
-		roots = append(roots, templ.Name())
+		roots = append(roots, template.Name())
 	}
 
 	// then execute all the important looking ones in order, adding them to the same file
@@ -205,6 +205,7 @@ func Funcs() template.FuncMap {
 		"obj":                obj,
 		"ts":                 TypeIdentifier,
 		"call":               Call,
+		"dict":               dict,
 		"prefixLines":        prefixLines,
 		"notNil":             notNil,
 		"strSplit":           StrSplit,
@@ -220,7 +221,6 @@ func Funcs() template.FuncMap {
 		"render": func(filename string, tpldata any) (*bytes.Buffer, error) {
 			return render(resolveName(filename, 0), tpldata)
 		},
-		"typeName": typeName,
 	}
 }
 
@@ -248,7 +248,13 @@ func isDelimiter(c rune) bool {
 }
 
 func ref(p types.Type) string {
-	return CurrentImports.LookupType(p)
+	typeString := CurrentImports.LookupType(p)
+	// TODO(steve): figure out why this is needed
+	// otherwise inconsistent sometimes
+	if typeString == "interface{}" {
+		return "any"
+	}
+	return typeString
 }
 
 func obj(obj types.Object) string {
@@ -273,6 +279,21 @@ func Call(p *types.Func) string {
 	}
 
 	return pkg + p.Name()
+}
+
+func dict(values ...any) (map[string]any, error) {
+	if len(values)%2 != 0 {
+		return nil, errors.New("invalid dict call: arguments must be key-value pairs")
+	}
+	m := make(map[string]any, len(values)/2)
+	for i := 0; i < len(values); i += 2 {
+		key, ok := values[i].(string)
+		if !ok {
+			return nil, errors.New("dict keys must be strings")
+		}
+		m[key] = values[i+1]
+	}
+	return m, nil
 }
 
 func resetModelNames() {
@@ -496,18 +517,18 @@ func wordWalker(str string, f func(*wordInfo)) {
 		if initialisms[upperWord] {
 			// If the uppercase word (string(runes[w:i]) is "ID" or "IP"
 			// AND
-			// the word is the first two characters of the str
+			// the word is the first two characters of the current word
 			// AND
 			// that is not the end of the word
 			// AND
-			// the length of the string is greater than 3
+			// the length of the remaining string is greater than 3
 			// AND
 			// the third rune is an uppercase one
 			// THEN
 			// do NOT count this as an initialism.
 			switch upperWord {
 			case "ID", "IP":
-				if word == str[:2] && !eow && len(str) > 3 && unicode.IsUpper(runes[3]) {
+				if remainingRunes := runes[w:]; word == string(remainingRunes[:2]) && !eow && len(remainingRunes) > 3 && unicode.IsUpper(remainingRunes[3]) {
 					continue
 				}
 			}
@@ -607,10 +628,10 @@ func Dump(val any) string {
 		for _, part := range val {
 			parts = append(parts, Dump(part))
 		}
-		return "[]interface{}{" + strings.Join(parts, ",") + "}"
+		return "[]any{" + strings.Join(parts, ",") + "}"
 	case map[string]any:
 		buf := bytes.Buffer{}
-		buf.WriteString("map[string]interface{}{")
+		buf.WriteString("map[string]any{")
 		var keys []string
 		for key := range val {
 			keys = append(keys, key)
@@ -648,16 +669,6 @@ func resolveName(name string, skip int) string {
 	return filepath.Join(filepath.Dir(callerFile), name)
 }
 
-func typeName(t types.Type) string {
-	name := types.TypeString(t, func(*types.Package) string {
-		return ""
-	})
-	if name != "" && strings.HasPrefix(name, "*") {
-		return name[1:]
-	}
-	return name
-}
-
 func render(filename string, tpldata any) (*bytes.Buffer, error) {
 	t := template.New("").Funcs(Funcs())
 
@@ -683,7 +694,7 @@ func write(filename string, b []byte, packages *code.Packages) error {
 
 	formatted, err := imports.Prune(filename, b, packages)
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "gofmt failed on %s: %s\n", filepath.Base(filename), err.Error())
+		fmt.Fprintf(os.Stderr, "gofmt failed on %s: %s\n", filepath.Base(filename), err.Error())
 		formatted = b
 	}
 
@@ -782,6 +793,8 @@ var CommonInitialisms = map[string]bool{
 	"XMPP":  true,
 	"XSRF":  true,
 	"XSS":   true,
+	"AWS":   true,
+	"GCP":   true,
 }
 
 // GetInitialisms returns the initialisms to capitalize in Go names. If unchanged, default initialisms will be returned

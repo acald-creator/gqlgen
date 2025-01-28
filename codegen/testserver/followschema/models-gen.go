@@ -184,10 +184,6 @@ type ObjectDirectives struct {
 	Order        []string `json:"order"`
 }
 
-type ObjectDirectivesConcurrent struct {
-	Key int `json:"key"`
-}
-
 type OmittableInput struct {
 	ID     graphql.Omittable[*string]     `json:"id,omitempty"`
 	Bool   graphql.Omittable[*bool]       `json:"bool,omitempty"`
@@ -319,7 +315,7 @@ func (e EnumTest) String() string {
 	return string(e)
 }
 
-func (e *EnumTest) UnmarshalGQL(v interface{}) error {
+func (e *EnumTest) UnmarshalGQL(v any) error {
 	str, ok := v.(string)
 	if !ok {
 		return fmt.Errorf("enums must be strings")
@@ -360,7 +356,7 @@ func (e Status) String() string {
 	return string(e)
 }
 
-func (e *Status) UnmarshalGQL(v interface{}) error {
+func (e *Status) UnmarshalGQL(v any) error {
 	str, ok := v.(string)
 	if !ok {
 		return fmt.Errorf("enums must be strings")
